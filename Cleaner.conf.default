@@ -6,6 +6,7 @@
   "LogFile": "",
   "LogFileMode": "",
   "trigger_rescan": false,
+  "trigger_purge": false,
   "EmailLog": false,
   "EmailServer": "",
   "EmailServerPort": 0,
@@ -31,6 +32,7 @@
   "default_watched": true,
   "default_progressAsWatched": 0,
   "default_location": "",
+  "default_purgeDays": 7,
   "default_onDeck": true,
   "default_homeUsers": "",
   "default_ignoreFolders": [
