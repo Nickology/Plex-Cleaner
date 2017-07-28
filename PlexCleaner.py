@@ -28,6 +28,8 @@ IgnoreSections = []  # Sections to skip cleaning, for use when Settings['Section
 LogFile = ""  # Location of log file to save console output
 LogFileMode = "overwrite"  # File Mode for logging, overwrite or append, default is overwrite
 trigger_rescan = False  # trigger_rescan will rescan a section if changes are made to it
+# trigger_purge If set to False will be disabled. If set to True, files that are copied or moved (based on default_action) will be deleted from the path default_location after default_purgeDays
+trigger_purge = False # True | False
 EmailLog = False  # Email the log file contents at conclusion of script
 EmailServer = ""  # Email Server (for Gmail, use smtp.gmail.com)
 EmailServerPort = 0  # Email Server Port (for Gmail, use 587)
@@ -101,6 +103,8 @@ default_maxDays = 60  # Maximum number of days to keep an episode
 # default_location specifies the location that episodes will be copied or moved to if the action is such
 # make sure this is the path to the directory on the local computer
 default_location = ''  # /path/to/file
+# default_purgeDays If trigger_purge is True, files that are copied or moved to default_location will be deleted after default_purgeDays days.
+default_purgeDays = 7 # Number of days to keep files in default_location before erasing them
 # default_homeUsers specifies the home users that the script will try to check watch status of in Plex Home
 # This will check if all users in the list have watched a show. Separate each user with a comma
 # You may use 'all' for the home Users and the script will check watch status of all the users in the Plex Home (Including Guest account if enabled)
@@ -315,6 +319,7 @@ def LoadSettings(opts):
     s['LogFile'] = opts.get('LogFile', LogFile)
     s['LogFileMode'] = opts.get('LogFileMode', LogFileMode)
     s['trigger_rescan'] = opts.get('trigger_rescan', trigger_rescan)
+    s['trigger_purge'] = opts.get('trigger_purge', trigger_purge)
     s['EmailLog'] = opts.get('EmailLog', EmailLog)
     s['EmailServer'] = opts.get('EmailServer', EmailServer)
     s['EmailServerPort'] = opts.get('EmailServerPort', EmailServerPort)
@@ -340,6 +345,7 @@ def LoadSettings(opts):
     s['default_watched'] = opts.get('default_watched', default_watched)
     s['default_progressAsWatched'] = opts.get('default_progressAsWatched', default_progressAsWatched)
     s['default_location'] = opts.get('default_location', default_location)
+    s['default_purgeDays'] = opts.get('default_purgeDays', default_purgeDays)
     s['default_onDeck'] = opts.get('default_onDeck', default_onDeck)
     s['default_homeUsers'] = opts.get('default_homeUsers', default_homeUsers)
     s['default_ignoreFolders'] = opts.get('default_ignoreFolders', default_ignoreFolders)
@@ -546,6 +552,26 @@ def getTotalSize(file):
             elif os.path.isdir(itempath):
                 total_size += getTotalSize(itempath)
     return total_size
+    
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 def getMediaInfo(VideoNode):
@@ -703,7 +729,38 @@ def checkMovies(doc, section):
     if Settings.get('cleanup_movie_folders', False):
         log("Cleaning up orphaned folders less than " + str(minimum_folder_size) + "MB in Section " + section)
         cleanUpFolders(section, minimum_folder_size)
+    if Settings.get('trigger_purge'):
+        checkPurge(action=movie_settings['action'], location=movie_settings['location'], purgeDays=movie_settings['purgeDays'])
+    
     return changes
+
+def checkPurge(action, location, purgeDays):
+	if purgeDays < 0:
+		log('[PURGE] purgeDays value is invalid; aborting purge')
+		return False
+	log("Checking PURGE; action: " + action + "; location: " + location + "; purgeDays: " + str(purgeDays))
+	if purgeDays > 0 and action in ['copy','move'] and location:
+		log('[PURGE] Conditions met')
+		print "Current time: %s" % time.time()
+		if os.path.isdir(location):
+			x = os.listdir(location)
+			for files in x:
+				file_status = "[IGNORE] "
+				# diff = time.time() - time.ctime(os.path.getmtime(location + "/" + files))
+				print "File time %i" % os.path.getmtime(location + "/" + files)
+				diff = time.time() - os.path.getmtime(location + "/" + files)
+				print "Diff = %i" % diff
+				if diff > purgeDays*86400:
+					file_status = "[PURGE] "
+				print file_status + files
+				# print "last modified: %s" % time.ctime(os.path.getmtime(location + "/" + files))
+				# print "last modified: %s" % os.path.getmtime(location + "/" + files)
+				# Log('Last modified: ' + os.path.getmtime(location + '/' + files))
+		else:
+			log('[PURGE] Unable to locate \'' + location + '\'')
+	else:
+		log('[PURGE] Conditions not met')
+	return
 
 
 # Cleans up orphaned folders in a section that are less than the max_size (in megabytes)
@@ -1096,6 +1153,7 @@ default_settings = {'episodes': Settings['default_episodes'],
                     'watched': Settings['default_watched'],
                     'progressAsWatched': Settings['default_progressAsWatched'],
                     'location': Settings['default_location'],
+                    'purgeDays': Settings['default_purgeDays'],
                     'onDeck': Settings['default_onDeck'],
                     'homeUsers': Settings['default_homeUsers']
                     }
@@ -1118,6 +1176,8 @@ FlaggedCount = 0
 FlaggedSize = 0
 KeptCount = 0
 KeptSize = 0
+PurgeCount = 0
+PurgeSize = 0
 ActionHistory = []
 
 doc_sections = getURLX(Settings['Host'] + ":" + Settings['Port'] + "/library/sections/")
@@ -1172,6 +1232,8 @@ for Section in Settings['SectionList']:
         if getURLX(Settings['Host'] + ":" + Settings['Port'] + "/library/sections/" + Section + "/refresh?deep=1",
                    parseXML=False):
             RescannedSections.append(Section)
+
+
 
 log("")
 log("----------------------------------------------------------------------------")
